@@ -1,0 +1,7 @@
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/CMakeFiles/rebuild_cache.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/CMakeFiles/bindings_go.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/CMakeFiles/edit_cache.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/core/CMakeFiles/edit_cache.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/core/CMakeFiles/rebuild_cache.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/core/CMakeFiles/lib_core.dir
+/home/kaiz/SourcetrailGoIndexer/sourcetrail/core/CMakeFiles/test_core.dir
