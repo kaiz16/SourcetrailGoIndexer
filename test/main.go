@@ -2,6 +2,7 @@ package main
 
 var g = "Hello"
 var b = "Hi"
+var n = 3
 
 func main() {
 	go func() {}()

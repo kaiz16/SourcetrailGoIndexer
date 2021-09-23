@@ -75,19 +75,29 @@ func (i Indexer) registerGlobalVariable(f *ast.GenDecl, name *ast.Ident) int {
 	srctrl.RecordSymbolKind(symbolId, srctrl.SYMBOL_GLOBAL_VARIABLE)
 	fmt.Println(position.Line, position.Column, position.Line, position.Column+len(name.Name)-1)
 	fmt.Println(position)
+	i.wg.Done()
+	return 2
+}
 
-	// pkg_name := ""
-	// if f.Pkg != nil && f.Pkg.Pkg != nil {
-	// 	pkg_name = f.Pkg.Pkg.Name()
-	// }
+func (i Indexer) registerLocalSymbol(name *ast.Ident) int {
+	i.wg.Add(1)
+	i.BeginTransaction()
+	defer i.CommitTransaction()
 
-	// Results := f.Signature.Results().String()
-	// if Results == "()" {
-	// 	Results = ""
-	// }
+	prog := i.prog
 
-	// nh := NameHierarchy{".", []NameElement{}}
-	// nh.push_back(NameElement{pkg_name, f.Name(), f.Signature.Params().String() + Results})
+	position := prog.Position(name.Pos())
+
+	fileId := srctrl.RecordFile(position.Filename)
+	srctrl.RecordFileLanguage(fileId, "cpp")
+	nh := NameHierarchy{".", []NameElement{}}
+	pkg_name := position.Filename
+	Results := ""
+	nh.push_back(NameElement{pkg_name, name.Name, Results})
+	symbolId := srctrl.RecordLocalSymbol(nh.string())
+	srctrl.RecordLocalSymbolLocation(symbolId, fileId, position.Line, position.Column, position.Line, position.Column+len(name.Name)-1)
+	fmt.Println(position.Line, position.Column, position.Line, position.Column+len(name.Name)-1)
+	fmt.Println(position)
 	i.wg.Done()
 	return 2
 }

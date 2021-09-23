@@ -7,9 +7,7 @@ import (
 )
 
 type AstVisitor struct {
-	pkgDecl map[*ast.GenDecl]bool
-	locals  map[string]int
-	globals map[string]int
+	globalGenDecls map[*ast.GenDecl]bool
 }
 
 func newVisitor(f *ast.File) AstVisitor {
@@ -22,13 +20,11 @@ func newVisitor(f *ast.File) AstVisitor {
 
 	return AstVisitor{
 		decls,
-		make(map[string]int),
-		make(map[string]int),
 	}
 }
 func (a AstVisitor) index(filePath string) {
 	// Create the AST by parsing filePath.
-	localDecls, globalDecls := make(map[string]int), make(map[string]int)
+	// localDecls, globalDecls := make(map[string]int), make(map[string]int)
 	f, err := parser.ParseFile(indexer.prog, filePath, nil, 0)
 	if err != nil {
 		panic(err)
@@ -36,26 +32,6 @@ func (a AstVisitor) index(filePath string) {
 
 	v := newVisitor(f)
 	ast.Walk(v, f)
-	for k, v := range v.locals {
-		localDecls[k] += v
-	}
-	for k, v := range v.globals {
-		globalDecls[k] += v
-	}
-	// Inspect the AST and print all identifiers and literals.
-	// ast.Inspect(f, func(n ast.Node) bool {
-	// 	var s string
-	// 	switch x := n.(type) {
-	// 	case *ast.BasicLit:
-	// 		s = x.Value
-	// 	case *ast.Ident:
-	// 		s = x.Name
-	// 	}
-	// 	if s != "" {
-	// 		fmt.Printf("%s:\t%s\n", fset.Position(n.Pos()), s)
-	// 	}
-	// 	return true
-	// })
 }
 
 func (v AstVisitor) Visit(n ast.Node) ast.Visitor {
@@ -69,34 +45,52 @@ func (v AstVisitor) Visit(n ast.Node) ast.Visitor {
 			return v
 		}
 		for _, name := range d.Lhs {
-			v.localDecl(name)
+			ident := v.getIdentFromNode(name)
+			if ident != nil {
+				indexer.registerLocalSymbol(ident)
+			}
 		}
 	case *ast.RangeStmt:
-		v.localDecl(d.Key)
-		v.localDecl(d.Value)
+		key := v.getIdentFromNode(d.Key)
+		if key != nil {
+			indexer.registerLocalSymbol(key)
+		}
+
+		val := v.getIdentFromNode(d.Value)
+		if val != nil {
+			indexer.registerLocalSymbol(val)
+		}
 	case *ast.FuncDecl:
 		if d.Recv != nil {
-			v.localDeclList(d.Recv.List)
+			for _, ident := range v.getIdentNodesFromFields(d.Recv.List) {
+				if ident != nil {
+					indexer.registerLocalSymbol(ident)
+				}
+			}
 		}
-		v.localDeclList(d.Type.Params.List)
+		for _, ident := range v.getIdentNodesFromFields(d.Type.Params.List) {
+			if ident != nil {
+				indexer.registerLocalSymbol(ident)
+			}
+		}
 		if d.Type.Results != nil {
-			v.localDeclList(d.Type.Results.List)
+			for _, ident := range v.getIdentNodesFromFields(d.Type.Results.List) {
+				if ident != nil {
+					indexer.registerLocalSymbol(ident)
+				}
+			}
 		}
 	case *ast.GenDecl:
 		if d.Tok != token.VAR {
 			return v
 		}
-		for _, spec := range d.Specs {
-			if value, ok := spec.(*ast.ValueSpec); ok {
-				for _, name := range value.Names {
-					if name.Name == "_" {
-						continue
-					}
-					if v.pkgDecl[d] {
-						indexer.registerGlobalVariable(d, name)
-					} else {
-						v.locals[name.Name]++
-					}
+		for _, ident := range v.getIdentNodesFromSpecs(d.Specs) {
+			if ident != nil {
+				// Global variable
+				if v.globalGenDecls[d] {
+					indexer.registerGlobalVariable(d, ident)
+				} else {
+					indexer.registerLocalSymbol(ident)
 				}
 			}
 		}
@@ -105,23 +99,41 @@ func (v AstVisitor) Visit(n ast.Node) ast.Visitor {
 	return v
 }
 
-func (v AstVisitor) localDecl(n ast.Node) {
+func (v AstVisitor) getIdentFromNode(n ast.Node) *ast.Ident {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
-		return
+		return nil
 	}
 	if ident.Name == "_" || ident.Name == "" {
-		return
+		return nil
 	}
 	if ident.Obj != nil && ident.Obj.Pos() == ident.Pos() {
-		v.locals[ident.Name]++
+		return ident
 	}
+	return nil
 }
 
-func (v AstVisitor) localDeclList(fs []*ast.Field) {
+func (v AstVisitor) getIdentNodesFromFields(fs []*ast.Field) []*ast.Ident {
+	nodes := make([]*ast.Ident, 0)
 	for _, f := range fs {
 		for _, name := range f.Names {
-			v.localDecl(name)
+			nodes = append(nodes, v.getIdentFromNode(name))
 		}
 	}
+	return nodes
+}
+
+func (v AstVisitor) getIdentNodesFromSpecs(fs []ast.Spec) []*ast.Ident {
+	nodes := make([]*ast.Ident, 0)
+	for _, spec := range fs {
+		if value, ok := spec.(*ast.ValueSpec); ok {
+			for _, name := range value.Names {
+				if name.Name == "_" {
+					continue
+				}
+				nodes = append(nodes, v.getIdentFromNode(name))
+			}
+		}
+	}
+	return nodes
 }
